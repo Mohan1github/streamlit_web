@@ -1,0 +1,15 @@
+streamlit
+langchain==0.1.14
+langchain_community==0.0.30
+langchain_openai==0.0.7
+openai
+chromadb==0.4.24
+hnswlib
+tiktoken
+python-dotenv
+beautifulsoup4
+requests
+pandas
+numpy
+dotenv
+bs4
