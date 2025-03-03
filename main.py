@@ -290,6 +290,11 @@ import os
 load_dotenv()
 openai_api_key = os.getenv("OPENAI_API_KEY")
 
+
+os.environ["USER_AGENT"] = "MyCustomUserAgent/1.0"
+# headers = {
+#     "User-Agent": "MyCustomUserAgent/1.0"
+# }
 if not openai_api_key:
     st.error("⚠️ OpenAI API key not found. Please set it in the .env file.")
 
@@ -310,54 +315,164 @@ if "chat_history" not in st.session_state:
 if "website_details" not in st.session_state:
     st.session_state.website_details = {}
 
+# def extract_website_details(url):
+#     st.info("🔄 Extracting website details...")
+    
+#     response = requests.get(url, timeout=10)
+#     if response.status_code != 200:
+#         st.error("⚠️ Failed to fetch the website. Please check the URL.")
+#         return None
+
+#     soup = BeautifulSoup(response.text, "html.parser")
+
+#     title = soup.title.string if soup.title else "N/A"
+#     meta_desc = soup.find("meta", attrs={"name": "description"})
+#     meta_keywords = soup.find("meta", attrs={"name": "keywords"})
+    
+#     description = meta_desc["content"] if meta_desc else "N/A"
+#     keywords = meta_keywords["content"] if meta_keywords else "N/A"
+    
+#     headings = {
+#         "H1": [h.text.strip() for h in soup.find_all("h1")],
+#         "H2": [h.text.strip() for h in soup.find_all("h2")],
+#         "H3": [h.text.strip() for h in soup.find_all("h3")],
+#     }
+
+#     paragraphs = soup.find_all("p")
+#     main_content = " ".join([p.text.strip() for p in paragraphs[:5]])[:500] + "..."
+    
+#     # Extract images
+#     images = [img["src"] for img in soup.find_all("img") if "src" in img.attrs]
+    
+#     # Extract links
+#     links = [a["href"] for a in soup.find_all("a", href=True)]
+    
+#     # Count words
+#     word_count = len(soup.get_text().split())
+    
+#     details = {
+#         "Title": title,
+#         "Description": description,
+#         "Keywords": keywords,
+#         "Headings": headings,
+#         "Content Summary": main_content,
+#         "Images": images,
+#         "Links": links,
+#         "Word Count": word_count,
+#     }
+
+#     st.success("✅ Website details extracted successfully!")
+#     return details
+
+# import streamlit as st
+# import requests
+import time
+from googlesearch import search 
+# from bs4 import BeautifulSoup
+from urllib.parse import urlparse
+
+
+def extract_relevant_websites(keywords, num_results=5):
+    """Fetch related websites using Google search."""
+    relevant_websites = []
+    
+    if keywords and keywords != "N/A":
+        query = f"{keywords} site:.com"
+        try:
+            search_results = search(query, num_results=num_results, stop=num_results)
+            relevant_websites = list(search_results)
+        except Exception as e:
+            st.warning(f"⚠️ Could not fetch related websites: {e}")
+    
+    return relevant_websites
+
+
 def extract_website_details(url):
     st.info("🔄 Extracting website details...")
-    
-    response = requests.get(url, timeout=10)
+    start_time = time.time()  # Start timer for page load time
+
+    try:
+        response = requests.get(url, timeout=10)
+        response_time = round(time.time() - start_time, 2)  # Calculate load time in seconds
+    except requests.exceptions.RequestException as e:
+        st.error(f"⚠️ Failed to fetch the website: {e}")
+        return None
+
     if response.status_code != 200:
-        st.error("⚠️ Failed to fetch the website. Please check the URL.")
+        st.error(f"⚠️ HTTP Error {response.status_code}: Unable to retrieve the website.")
         return None
 
     soup = BeautifulSoup(response.text, "html.parser")
 
+    # Extract Meta Details
     title = soup.title.string if soup.title else "N/A"
     meta_desc = soup.find("meta", attrs={"name": "description"})
     meta_keywords = soup.find("meta", attrs={"name": "keywords"})
     
     description = meta_desc["content"] if meta_desc else "N/A"
     keywords = meta_keywords["content"] if meta_keywords else "N/A"
-    
+
+    # Extract Headings
     headings = {
         "H1": [h.text.strip() for h in soup.find_all("h1")],
         "H2": [h.text.strip() for h in soup.find_all("h2")],
         "H3": [h.text.strip() for h in soup.find_all("h3")],
     }
 
+    # Extract Main Content Summary
     paragraphs = soup.find_all("p")
     main_content = " ".join([p.text.strip() for p in paragraphs[:5]])[:500] + "..."
-    
-    # Extract images
+
+    # Extract Images
     images = [img["src"] for img in soup.find_all("img") if "src" in img.attrs]
-    
-    # Extract links
-    links = [a["href"] for a in soup.find_all("a", href=True)]
-    
+    image_count = len(images)
+
+    # Extract Links and Categorize
+    parsed_url = urlparse(url)
+    base_domain = parsed_url.netloc
+    all_links = [a["href"] for a in soup.find_all("a", href=True)]
+
+    internal_links = [link for link in all_links if urlparse(link).netloc == "" or base_domain in urlparse(link).netloc]
+    external_links = [link for link in all_links if urlparse(link).netloc and base_domain not in urlparse(link).netloc]
+
     # Count words
     word_count = len(soup.get_text().split())
-    
+
+    # Basic Tech Stack Detection
+    tech_stack = []
+    if "wp-content" in response.text:
+        tech_stack.append("WordPress")
+    if "React" in response.text or "__REACT_DEVTOOLS_GLOBAL_HOOK__" in response.text:
+        tech_stack.append("React")
+    if "vue" in response.text or "Vue" in response.text:
+        tech_stack.append("Vue.js")
+    if "Next.js" in response.text:
+        tech_stack.append("Next.js")
+    if "tailwind" in response.text:
+        tech_stack.append("Tailwind CSS")
+
+    related_websites = extract_relevant_websites(keywords)
     details = {
+        "word_count": word_count,
         "Title": title,
         "Description": description,
         "Keywords": keywords,
         "Headings": headings,
-        "Content Summary": main_content,
+        "Content_Summary": main_content,
         "Images": images,
-        "Links": links,
+        "Image Count": image_count,
+        "Links": all_links,
+        "Internal Links Count": len(internal_links),
+        "External Links Count": len(external_links),
         "Word Count": word_count,
+        "Page Load Time": f"{response_time} sec",
+        "Tech Stack": tech_stack if tech_stack else ["Unknown"],
+        "Related Websites": related_websites,
     }
 
     st.success("✅ Website details extracted successfully!")
     return details
+
 
 def process_website(url):
     st.info("🔄 Scraping and Processing Website...")
@@ -377,6 +492,16 @@ def process_website(url):
 #         llm=llm, retriever=retriever, memory=memory
 #     )
 #     return rag_chain
+from wordcloud import WordCloud
+import matplotlib.pyplot as plt
+def generate_wordcloud(text):
+    """Generate a Word Cloud from website text."""
+    wordcloud = WordCloud(width=300, height=200, background_color="white", colormap="coolwarm").generate(text)
+
+    fig, ax = plt.subplots(figsize=(3, 2))
+    ax.imshow(wordcloud, interpolation="bilinear")
+    ax.axis("off")
+    return fig
 
 with st.sidebar:
     st.header("🔗 Website Input")
@@ -389,7 +514,18 @@ with st.sidebar:
         else:
             st.warning("⚠️ Please enter a website URL.")
 
+    wordcloud_fig = generate_wordcloud(st.session_state.website_details["Content_Summary"])
+    st.pyplot(wordcloud_fig)
+
+    # with st.expander("🔗 Extracted Links"):
+    #     for link in st.session_state.website_details["Related Websites"][:10]:
+    #         st.write(link)
+    
+    
+
+
 if st.session_state.website_details:
+    user_query = st.chat_input("💬 Ask about the website...")
     st.subheader("📄 Extracted Website Details")
     col1, col2 = st.columns(2)
     with col1:
@@ -397,6 +533,7 @@ if st.session_state.website_details:
         st.write(f"**🔹 Description:** {st.session_state.website_details['Description']}")
         st.write(f"**🔹 Keywords:** {st.session_state.website_details['Keywords']}")
         st.write(f"**🔹 Word Count:** {st.session_state.website_details['Word Count']}")
+        # st.write(f"**🔹 Relative websites:** {st.session_state.website_details['Related Websites']}")
     with col2:
         st.write("**🔹 Headings:**")
         for level, items in st.session_state.website_details["Headings"].items():
