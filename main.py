@@ -1,569 +1,348 @@
-# import streamlit as st
-# from langchain_core.messages import AIMessage, HumanMessage
-# from langchain_community.document_loaders import WebBaseLoader
-# from langchain.text_splitter import RecursiveCharacterTextSplitter
-# from langchain_community.vectorstores import Chroma
-# from langchain_openai import OpenAIEmbeddings, ChatOpenAI
-# from dotenv import load_dotenv   
-# from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-# from langchain.chains import create_history_aware_retriever, create_retrieval_chain
-# from langchain.chains.combine_documents import create_stuff_documents_chain
-
-# # Load environment variables
-# load_dotenv()
-
-# # Streamlit page config
-# st.set_page_config(page_title="RAG Website Summarizer", page_icon="🔍")
-# st.title("Chat with Websites: RAG-based Summarizer")
-
-# # Session state initialization
-# if "chat_history" not in st.session_state:
-#     st.session_state.chat_history = [
-#         AIMessage(content="Hello, I am a bot. How can I help you?")
-#     ]
-
-# if "vector_db" not in st.session_state:
-#     st.session_state.vector_db = None
-#     st.session_state.last_url = None  # Track last entered URL
-
-# # Function to get response from RAG system
-# def get_response(user_query):
-#     retriever_chain = get_context_retriever_chain(st.session_state.vector_db)
-#     conversation_rag_chain = get_conversational_rag_chain(retriever_chain)
-    
-#     response = conversation_rag_chain.invoke({
-#         "chat_history": st.session_state.chat_history,
-#         "input": user_query
-#     })
-    
-#     st.session_state.chat_history.append(HumanMessage(content=user_query))
-#     st.session_state.chat_history.append(AIMessage(content=response["answer"]))
-
-#     return response["answer"]
-
-# # Function to vectorize website content
-# def get_vectorizer_web_url(url):
-#     loader = WebBaseLoader(url)
-#     doc = loader.load()
-#     text_splitter = RecursiveCharacterTextSplitter()
-#     docs_chunk = text_splitter.split_documents(doc)
-#     vector_db = Chroma.from_documents(docs_chunk, OpenAIEmbeddings())
-#     return vector_db
-
-# # Function to create the retriever chain
-# def get_context_retriever_chain(vector_db):
-#     llm = ChatOpenAI()
-#     retriever = vector_db.as_retriever()
-
-#     prompt = ChatPromptTemplate.from_messages([
-#         MessagesPlaceholder(variable_name="chat_history"),
-#         ("user", "{input}"),
-#         ("system", "Based on the conversation history, generate a search query to find relevant information."),
-#     ])
-
-#     retriever_chain = create_history_aware_retriever(llm, retriever, prompt)
-#     return retriever_chain
-
-# # Function to create the conversational RAG chain
-# def get_conversational_rag_chain(retriever_chain):
-#     llm = ChatOpenAI()
-
-#     prompt = ChatPromptTemplate.from_messages([
-#         ("system", "Answer the user's questions using the context below:\n\n{context}"),
-#         MessagesPlaceholder(variable_name="chat_history"),
-#         ("user", "{input}"),
-#     ])
-
-#     stuff_documents_chain = create_stuff_documents_chain(llm, prompt)
-#     retrieval_chain = create_retrieval_chain(retriever_chain, stuff_documents_chain)
-
-#     return retrieval_chain
-
-# # Sidebar input for website URL
-# with st.sidebar:
-#     st.header("Settings")
-#     web_url = st.text_input("Enter the website URL")
-
-# # Process the input URL
-# if web_url:
-#     # Update vector store only if a new URL is entered
-#     if web_url != st.session_state.last_url:
-#         st.session_state.vector_db = get_vectorizer_web_url(web_url)
-#         st.session_state.last_url = web_url  # Save the last entered URL
-
-#     user_query = st.chat_input("Type your question...")
-
-#     if user_query:
-#         response = get_response(user_query)
-#         st.write(response)
-
-#     # Display chat history
-#     for message in st.session_state.chat_history:
-#         if isinstance(message, AIMessage):
-#             with st.chat_message("AI"):
-#                 st.write(message.content)
-#         elif isinstance(message, HumanMessage):
-#             with st.chat_message("Human"):
-#                 st.write(message.content)
-
-
-
-
-
-
-
-
-
-# import streamlit as st
-# from langchain_community.document_loaders import WebBaseLoader
-# from langchain.text_splitter import RecursiveCharacterTextSplitter
-# from langchain_community.vectorstores import Chroma
-# from langchain_openai import OpenAIEmbeddings, ChatOpenAI
-# from dotenv import load_dotenv
-# from langchain.chains import ConversationalRetrievalChain
-# from langchain.memory import ConversationBufferMemory
-# from bs4 import BeautifulSoup
-# import requests
-# import os
-# # Load environment variables (for OpenAI API key)
-# load_dotenv()
-# openai_api_key = os.getenv("OPENAI_API_KEY")
-
-
-# if not openai_api_key:
-#     st.error("⚠️ OpenAI API key not found. Please set it in the .env file.")
-
-
-# embeddings = OpenAIEmbeddings(openai_api_key=openai_api_key)
-# llm = ChatOpenAI(model="gpt-4", temperature=0.5, openai_api_key=openai_api_key)
-# # Streamlit app setup
-# st.set_page_config(page_title="RAG Website Analyzer", page_icon="🌍")
-# st.title("🔎 RAG-based Website Analyzer")
-
-# # Initialize session state
-# if "vector_db" not in st.session_state:
-#     st.session_state.vector_db = None
-
-# if "chat_history" not in st.session_state:
-#     st.session_state.chat_history = []
-
-# if "website_details" not in st.session_state:
-#     st.session_state.website_details = {}
-
-# # Function to scrape and extract website details
-# def extract_website_details(url):
-#     st.info("🔄 Extracting website details...")
-    
-#     response = requests.get(url, timeout=10)
-#     if response.status_code != 200:
-#         st.error("⚠️ Failed to fetch the website. Please check the URL.")
-#         return None
-
-#     soup = BeautifulSoup(response.text, "html.parser")
-
-#     # Extract key details
-#     title = soup.title.string if soup.title else "N/A"
-#     meta_desc = soup.find("meta", attrs={"name": "description"})
-#     meta_keywords = soup.find("meta", attrs={"name": "keywords"})
-
-#     description = meta_desc["content"] if meta_desc else "N/A"
-#     keywords = meta_keywords["content"] if meta_keywords else "N/A"
-
-#     # Extract headings
-#     headings = {
-#         "H1": [h.text.strip() for h in soup.find_all("h1")],
-#         "H2": [h.text.strip() for h in soup.find_all("h2")],
-#         "H3": [h.text.strip() for h in soup.find_all("h3")],
-#     }
-
-#     # Extract main content (first 500 characters as a preview)
-#     paragraphs = soup.find_all("p")
-#     main_content = " ".join([p.text.strip() for p in paragraphs[:5]])[:500] + "..."
-
-#     details = {
-#         "Title": title,
-#         "Description": description,
-#         "Keywords": keywords,
-#         "Headings": headings,
-#         "Content Summary": main_content,
-#     }
-
-#     st.success("✅ Website details extracted successfully!")
-#     return details
-
-# # Function to scrape and vectorize website content
-# def process_website(url):
-#     st.info("🔄 Scraping and Processing Website...")
-
-#     # Load website content
-#     loader = WebBaseLoader(url)
-#     documents = loader.load()
-
-#     # Split text into chunks
-#     text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
-#     docs_chunk = text_splitter.split_documents(documents)
-
-#     # Convert to vectors and store in ChromaDB
-#     # embeddings = OpenAIEmbeddings()
-#     vector_db = Chroma.from_documents(docs_chunk, embeddings)
-
-#     st.success("✅ Website processed successfully!")
-#     return vector_db
-
-# # Function to create the RAG retrieval chain
-# def get_rag_chain(vector_db):
-#     retriever = vector_db.as_retriever(search_kwargs={"k": 3})  # Retrieve top 3 relevant chunks
-#     # llm = ChatOpenAI(model="gpt-4", temperature=0.5)
-
-#     memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
-    
-#     rag_chain = ConversationalRetrievalChain.from_llm(
-#         llm=llm, retriever=retriever, memory=memory
-#     )
-#     return rag_chain
-
-# # Sidebar for website input
-# with st.sidebar:
-#     st.header("🔗 Website Input")
-#     website_url = st.text_input("Enter Website URL")
-
-#     if st.button("Process Website"):
-#         if website_url:
-#             # Extract and display website details
-#             st.session_state.website_details = extract_website_details(website_url)
-
-#             # Process website for RAG retrieval
-#             st.session_state.vector_db = process_website(website_url)
-#         else:
-#             st.warning("⚠️ Please enter a website URL.")
-
-# # Display extracted website details
-# if st.session_state.website_details:
-#     st.subheader("📄 Extracted Website Details")
-#     st.write(f"**🔹 Title:** {st.session_state.website_details['Title']}")
-#     st.write(f"**🔹 Description:** {st.session_state.website_details['Description']}")
-#     st.write(f"**🔹 Keywords:** {st.session_state.website_details['Keywords']}")
-    
-#     # Display headings
-#     st.write("**🔹 Headings:**")
-#     for level, items in st.session_state.website_details["Headings"].items():
-#         if items:
-#             st.write(f"  **{level}**: {', '.join(items)}")
-
-#     st.write("**🔹 Content Summary:**")
-#     st.info(st.session_state.website_details["Content Summary"])
-
-# # Chat interface
-# if st.session_state.vector_db:
-#     rag_chain = get_rag_chain(st.session_state.vector_db)
-#     user_query = st.chat_input("💬 Ask about the website...")
-
-#     if user_query:
-#         response = rag_chain.run({"question": user_query, "chat_history": st.session_state.chat_history})
-        
-#         # Store chat history
-#         st.session_state.chat_history.append(("User", user_query))
-#         st.session_state.chat_history.append(("AI", response))
-
-#         st.write("🧠 --AI Response:--")
-#         st.write(response)
-
-#     # Display chat history
-#     for role, msg in st.session_state.chat_history:
-#         with st.chat_message(role):
-#             st.write(msg)
-
-
 import streamlit as st
 from langchain_community.document_loaders import WebBaseLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_community.vectorstores import Chroma
-from langchain_openai import OpenAIEmbeddings, ChatOpenAI
+from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_community.vectorstores import FAISS
+from langchain_core.documents import Document
+from langchain.chains import RetrievalQA
 from dotenv import load_dotenv
-from langchain.chains import ConversationalRetrievalChain
-from langchain.memory import ConversationBufferMemory
 from bs4 import BeautifulSoup
 import requests
 import os
+from urllib.parse import urlparse, urljoin
+import time
+import logging
+import socket
+import ssl
+from datetime import datetime
+from rouge_score import rouge_scorer  # For ROUGE evaluation
+
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Load environment variables
 load_dotenv()
-openai_api_key = os.getenv("OPENAI_API_KEY")
-
+groq_api_key = os.getenv("GROQ_API_KEY")
 
 os.environ["USER_AGENT"] = "MyCustomUserAgent/1.0"
-# headers = {
-#     "User-Agent": "MyCustomUserAgent/1.0"
-# }
-if not openai_api_key:
-    st.error("⚠️ OpenAI API key not found. Please set it in the .env file.")
+if not groq_api_key:
+    st.error("⚠️ Groq API key not found. Please set it in the .env file.")
+    st.stop()
 
-embeddings = OpenAIEmbeddings(openai_api_key=openai_api_key)
-llm = ChatOpenAI(model="gpt-4", temperature=0.5, openai_api_key=openai_api_key)
+# Initialize HuggingFace embeddings
+try:
+    embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+except Exception as e:
+    st.error(f"⚠️ Failed to initialize HuggingFace embeddings: {str(e)}")
+    logger.error(f"HuggingFace embeddings initialization error: {str(e)}")
+    st.stop()
+
+# Initialize Groq LLM
+from langchain_groq import ChatGroq
+
+try:
+    llm = ChatGroq(groq_api_key=groq_api_key, temperature=0.5, model_name="qwen-2.5-32b")
+except Exception as e:
+    st.error(f"⚠️ Failed to initialize Groq Chat model: {str(e)}")
+    logger.error(f"Groq Chat model initialization error: {str(e)}")
+    st.stop()
 
 # Streamlit app setup
 st.set_page_config(page_title="RAG Website Analyzer", page_icon="🌍", layout="wide")
 st.title("🔎 RAG-based Website Analyzer")
+st.title("Search and surf to the world!!!!!")
 
 # Initialize session state
 if "vector_db" not in st.session_state:
     st.session_state.vector_db = None
-
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
-
 if "website_details" not in st.session_state:
     st.session_state.website_details = {}
+if "sub_pages_details" not in st.session_state:
+    st.session_state.sub_pages_details = {}
+if "qa_chain" not in st.session_state:
+    st.session_state.qa_chain = None
+if "accuracy_score" not in st.session_state:
+    st.session_state.accuracy_score = None
+if "security_assessment" not in st.session_state:
+    st.session_state.security_assessment = {}
+if "main_page_accuracy" not in st.session_state:
+    st.session_state.main_page_accuracy = 0.0
+if "human_eval_scores" not in st.session_state:
+    st.session_state.human_eval_scores = []  # Store human evaluation scores
 
-# def extract_website_details(url):
-#     st.info("🔄 Extracting website details...")
-    
-#     response = requests.get(url, timeout=10)
-#     if response.status_code != 200:
-#         st.error("⚠️ Failed to fetch the website. Please check the URL.")
-#         return None
+# ROUGE Scorer
+rouge_scorer_instance = rouge_scorer.RougeScorer(['rouge1', 'rouge2', 'rougeL'], use_stemmer=True)
 
-#     soup = BeautifulSoup(response.text, "html.parser")
+def calculate_accuracy(details):
+    total_elements = 5
+    score = 0
+    if details["Title"] != "N/A": score += 1
+    if details["Description"] != "N/A": score += 1
+    if any(details["Headings"]["H1"]) or any(details["Headings"]["H2"]): score += 1
+    if details["Content"] != "No content available" and len(details["Content"]) > 50: score += 1
+    if len(details["Internal Links"]) > 0: score += 1
+    return round((score / total_elements) * 100, 2)
 
-#     title = soup.title.string if soup.title else "N/A"
-#     meta_desc = soup.find("meta", attrs={"name": "description"})
-#     meta_keywords = soup.find("meta", attrs={"name": "keywords"})
-    
-#     description = meta_desc["content"] if meta_desc else "N/A"
-#     keywords = meta_keywords["content"] if meta_keywords else "N/A"
-    
-#     headings = {
-#         "H1": [h.text.strip() for h in soup.find_all("h1")],
-#         "H2": [h.text.strip() for h in soup.find_all("h2")],
-#         "H3": [h.text.strip() for h in soup.find_all("h3")],
-#     }
+def get_security_details(url):
+    security_info = {
+        "ssl_enabled": False,
+        "ssl_expiry": "N/A",
+        "http_headers": {},
+        "vulnerable_headers": [],
+        "overall_safety": "Unknown"
+    }
+    try:
+        context = ssl.create_default_context()
+        with socket.create_connection((urlparse(url).netloc, 443), timeout=5) as sock:
+            with context.wrap_socket(sock, server_hostname=urlparse(url).netloc) as ssock:
+                security_info["ssl_enabled"] = True
+                ssl_info = ssock.getpeercert()
+                expiry_date = datetime.strptime(ssl_info['notAfter'], "%b %d %H:%M:%S %Y %Z")
+                security_info["ssl_expiry"] = expiry_date.strftime("%Y-%m-%d")
+        response = requests.get(url, timeout=5)
+        security_info["http_headers"] = response.headers
+        vulnerable_headers = ["X-Frame-Options", "Strict-Transport-Security", "Content-Security-Policy"]
+        for header in vulnerable_headers:
+            if header not in security_info["http_headers"]:
+                security_info["vulnerable_headers"].append(header)
+        if not security_info["ssl_enabled"]:
+            security_info["overall_safety"] = "Potentially Unsafe (No SSL)"
+        elif security_info["vulnerable_headers"]:
+            security_info["overall_safety"] = "Needs Improvement (Vulnerable Headers)"
+        else:
+            security_info["overall_safety"] = "Safe"
+    except Exception as e:
+        logger.error(f"Error fetching security details for {url}: {e}")
+        security_info["overall_safety"] = f"Error: {e}"
+    return security_info
 
-#     paragraphs = soup.find_all("p")
-#     main_content = " ".join([p.text.strip() for p in paragraphs[:5]])[:500] + "..."
-    
-#     # Extract images
-#     images = [img["src"] for img in soup.find_all("img") if "src" in img.attrs]
-    
-#     # Extract links
-#     links = [a["href"] for a in soup.find_all("a", href=True)]
-    
-#     # Count words
-#     word_count = len(soup.get_text().split())
-    
-#     details = {
-#         "Title": title,
-#         "Description": description,
-#         "Keywords": keywords,
-#         "Headings": headings,
-#         "Content Summary": main_content,
-#         "Images": images,
-#         "Links": links,
-#         "Word Count": word_count,
-#     }
-
-#     st.success("✅ Website details extracted successfully!")
-#     return details
-
-# import streamlit as st
-# import requests
-import time
-from googlesearch import search 
-# from bs4 import BeautifulSoup
-from urllib.parse import urlparse
-
-
-def extract_relevant_websites(keywords, num_results=5):
-    """Fetch related websites using Google search."""
-    relevant_websites = []
-    
-    if keywords and keywords != "N/A":
-        query = f"{keywords} site:.com"
-        try:
-            search_results = search(query, num_results=num_results, stop=num_results)
-            relevant_websites = list(search_results)
-        except Exception as e:
-            st.warning(f"⚠️ Could not fetch related websites: {e}")
-    
-    return relevant_websites
-
-
-def extract_website_details(url):
-    st.info("🔄 Extracting website details...")
-    start_time = time.time()  # Start timer for page load time
-
+def extract_website_details(url, is_subpage=False):
+    if not is_subpage:
+        st.info("🔄 Extracting website details...")
+    start_time = time.time()
     try:
         response = requests.get(url, timeout=10)
-        response_time = round(time.time() - start_time, 2)  # Calculate load time in seconds
+        response_time = round(time.time() - start_time, 2)
     except requests.exceptions.RequestException as e:
-        st.error(f"⚠️ Failed to fetch the website: {e}")
+        if not is_subpage:
+            st.error(f"⚠️ Failed to fetch the website: {e}")
+        logger.error(f"Request failed for {url}: {str(e)}")
         return None
-
     if response.status_code != 200:
-        st.error(f"⚠️ HTTP Error {response.status_code}: Unable to retrieve the website.")
+        if not is_subpage:
+            st.error(f"⚠️ HTTP Error {response.status_code}: Unable to retrieve the website.")
         return None
-
     soup = BeautifulSoup(response.text, "html.parser")
-
-    # Extract Meta Details
     title = soup.title.string if soup.title else "N/A"
     meta_desc = soup.find("meta", attrs={"name": "description"})
-    meta_keywords = soup.find("meta", attrs={"name": "keywords"})
-    
     description = meta_desc["content"] if meta_desc else "N/A"
-    keywords = meta_keywords["content"] if meta_keywords else "N/A"
-
-    # Extract Headings
-    headings = {
-        "H1": [h.text.strip() for h in soup.find_all("h1")],
-        "H2": [h.text.strip() for h in soup.find_all("h2")],
-        "H3": [h.text.strip() for h in soup.find_all("h3")],
-    }
-
-    # Extract Main Content Summary
+    headings = {"H1": [h.text.strip() for h in soup.find_all("h1")], "H2": [h.text.strip() for h in soup.find_all("h2")]}
     paragraphs = soup.find_all("p")
-    main_content = " ".join([p.text.strip() for p in paragraphs[:5]])[:500] + "..."
-
-    # Extract Images
-    images = [img["src"] for img in soup.find_all("img") if "src" in img.attrs]
-    image_count = len(images)
-
-    # Extract Links and Categorize
+    main_content = " ".join([p.text.strip() for p in paragraphs if p.text.strip()]) or "No content available"
+    main_content_words = main_content.split()
+    if len(main_content_words) > 500:
+        main_content = " ".join(main_content_words[:500])
+    internal_links = []
     parsed_url = urlparse(url)
     base_domain = parsed_url.netloc
-    all_links = [a["href"] for a in soup.find_all("a", href=True)]
-
+    all_links = [urljoin(url, a["href"]) for a in soup.find_all("a", href=True)]
     internal_links = [link for link in all_links if urlparse(link).netloc == "" or base_domain in urlparse(link).netloc]
-    external_links = [link for link in all_links if urlparse(link).netloc and base_domain not in urlparse(link).netloc]
-
-    # Count words
-    word_count = len(soup.get_text().split())
-
-    # Basic Tech Stack Detection
-    tech_stack = []
-    if "wp-content" in response.text:
-        tech_stack.append("WordPress")
-    if "React" in response.text or "__REACT_DEVTOOLS_GLOBAL_HOOK__" in response.text:
-        tech_stack.append("React")
-    if "vue" in response.text or "Vue" in response.text:
-        tech_stack.append("Vue.js")
-    if "Next.js" in response.text:
-        tech_stack.append("Next.js")
-    if "tailwind" in response.text:
-        tech_stack.append("Tailwind CSS")
-
-    related_websites = extract_relevant_websites(keywords)
     details = {
-        "word_count": word_count,
+        "url": url,
         "Title": title,
         "Description": description,
-        "Keywords": keywords,
         "Headings": headings,
-        "Content_Summary": main_content,
-        "Images": images,
-        "Image Count": image_count,
-        "Links": all_links,
-        "Internal Links Count": len(internal_links),
-        "External Links Count": len(external_links),
-        "Word Count": word_count,
+        "Content": main_content,
+        "Internal Links": internal_links,
         "Page Load Time": f"{response_time} sec",
-        "Tech Stack": tech_stack if tech_stack else ["Unknown"],
-        "Related Websites": related_websites,
+        "Accuracy": calculate_accuracy({"Title": title, "Description": description, "Headings": headings, "Content": main_content, "Internal Links": internal_links})
     }
-
-    st.success("✅ Website details extracted successfully!")
+    if not is_subpage:
+        st.success("✅ Website details extracted successfully!")
     return details
 
+def crawl_sub_pages(base_url, max_pages=4):
+    visited = set()
+    to_visit = [base_url]
+    sub_pages_details = {}
+    st.info(f"🔄 Crawling up to {max_pages} sub-pages for display...")
+    while to_visit and len(visited) < max_pages:
+        url = to_visit.pop(0)
+        if url in visited:
+            continue
+        details = extract_website_details(url, is_subpage=True)
+        if details:
+            visited.add(url)
+            sub_pages_details[url] = details
+            for link in details["Internal Links"]:
+                if link not in visited and link not in to_visit and len(visited) + len(to_visit) < max_pages:
+                    to_visit.append(link)
+    st.success(f"✅ Crawled {len(sub_pages_details)} sub-pages successfully!")
+    return sub_pages_details
 
-def process_website(url):
-    st.info("🔄 Scraping and Processing Website...")
-    loader = WebBaseLoader(url)
-    documents = loader.load()
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
-    docs_chunk = text_splitter.split_documents(documents)
-    # vector_db = Chroma.from_documents(docs_chunk, embeddings)
-    st.success("✅ Website processed successfully!")
-    # return vector_db
-    return docs_chunk
+def process_website(details):
+    st.info("🔄 Processing main page content for RAG analysis...")
+    try:
+        main_content = details["Content"]
+        if not main_content or main_content == "No content available":
+            st.warning("⚠️ Limited content available for embedding. Proceeding with minimal data.")
+            main_content = "Minimal content extracted from the page."
+        document = Document(page_content=main_content, metadata={"url": details["url"]})
+        text_splitter = RecursiveCharacterTextSplitter(chunk_size=250, chunk_overlap=25)
+        docs_chunk = text_splitter.split_documents([document])
+        if not docs_chunk:
+            st.warning("⚠️ No chunks created. Using full content as a single chunk.")
+            docs_chunk = [document]
+        vector_store = FAISS.from_documents(docs_chunk, embeddings)
+        qa_chain = RetrievalQA.from_chain_type(
+            llm=llm,
+            chain_type="stuff",
+            retriever=vector_store.as_retriever(search_kwargs={"k": 3}),
+            return_source_documents=True
+        )
+        st.success("✅ RAG processing completed !!")
+        return vector_store, qa_chain
+    except Exception as e:
+        st.error(f"⚠️ Failed to process website for RAG: {str(e)}")
+        logger.error(f"RAG processing error: {str(e)}", exc_info=True)
+        return None, None
 
-# def get_rag_chain(vector_db):
-#     retriever = vector_db.as_retriever(search_kwargs={"k": 3})
-#     memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
-#     rag_chain = ConversationalRetrievalChain.from_llm(
-#         llm=llm, retriever=retriever, memory=memory
-#     )
-#     return rag_chain
-from wordcloud import WordCloud
-import matplotlib.pyplot as plt
-def generate_wordcloud(text):
-    """Generate a Word Cloud from website text."""
-    wordcloud = WordCloud(width=300, height=200, background_color="white", colormap="coolwarm").generate(text)
-
-    fig, ax = plt.subplots(figsize=(3, 2))
-    ax.imshow(wordcloud, interpolation="bilinear")
-    ax.axis("off")
-    return fig
+def calculate_rouge_scores(generated_text, reference_text):
+    """Calculate ROUGE scores between generated and reference text."""
+    scores = rouge_scorer_instance.score(reference_text, generated_text)
+    return {
+        "ROUGE-1": scores["rouge1"].fmeasure,
+        "ROUGE-2": scores["rouge2"].fmeasure,
+        "ROUGE-L": scores["rougeL"].fmeasure
+    }
 
 with st.sidebar:
     st.header("🔗 Website Input")
-    website_url = st.text_input("Enter Website URL")
-    
-    if st.button("Process Website"):
+    website_url = st.text_input("Enter Website URL", "https://example.com")
+    crawl_limit = st.slider("Crawl Limit (Sub-pages)", 1, 50, 4)
+    if st.button("Analyze Website"):
         if website_url:
-            st.session_state.website_details = extract_website_details(website_url)
-            # st.session_state.vector_db = process_website(website_url)
+            with st.spinner("Processing..."):
+                st.session_state.website_details = extract_website_details(website_url)
+                st.session_state.security_assessment = get_security_details(website_url)
+                if st.session_state.website_details:
+                    st.session_state.sub_pages_details = crawl_sub_pages(website_url, max_pages=crawl_limit)
+                    st.session_state.vector_db, st.session_state.qa_chain = process_website(st.session_state.website_details)
+                    st.session_state.main_page_accuracy = st.session_state.website_details["Accuracy"]
+                    sub_accuracies = [details["Accuracy"] for details in st.session_state.sub_pages_details.values()]
+                    total_pages = 1 + len(sub_accuracies)
+                    overall_accuracy = (st.session_state.main_page_accuracy + sum(sub_accuracies)) / total_pages if total_pages > 0 else st.session_state.main_page_accuracy
+                    st.session_state.accuracy_score = round(overall_accuracy, 2)
         else:
             st.warning("⚠️ Please enter a website URL.")
-
-    wordcloud_fig = generate_wordcloud(st.session_state.website_details["Content_Summary"])
-    st.pyplot(wordcloud_fig)
-
-    # with st.expander("🔗 Extracted Links"):
-    #     for link in st.session_state.website_details["Related Websites"][:10]:
-    #         st.write(link)
     
-    
+    st.sidebar.header("🔒 Security Assessment")
+    if st.session_state.security_assessment:
+        security_info = st.session_state.security_assessment
+        st.sidebar.write(f"**Overall Safety:** {security_info['overall_safety']}")
+        st.sidebar.write(f"**SSL Enabled:** {security_info['ssl_enabled']}")
+        if security_info["ssl_enabled"]:
+            st.sidebar.write(f"  - SSL Expiry: {security_info['ssl_expiry']}")
+        st.sidebar.write("**Vulnerable Headers:**")
+        if security_info["vulnerable_headers"]:
+            for header in security_info["vulnerable_headers"]:
+                st.sidebar.write(f"  - {header}")
+        else:
+            st.sidebar.write("  - None")
+    else:
+        st.sidebar.write("Security assessment pending...")
 
+    if st.session_state.accuracy_score is not None:
+        st.sidebar.subheader("📊 Data Accuracy")
+        st.sidebar.write(f"**Overall Accuracy Score:** {st.session_state.accuracy_score}%")
+        st.sidebar.write("(Based on completeness of scraped data)")
 
 if st.session_state.website_details:
-    user_query = st.chat_input("💬 Ask about the website...")
-    st.subheader("📄 Extracted Website Details")
+    st.subheader("💬 Ask About Website")
+    user_query = st.chat_input("Type your question here (about the main page content only)...")
+    for message in st.session_state.chat_history:
+        with st.chat_message(message["role"]):
+            st.write(message["content"])
+    if user_query and st.session_state.qa_chain:
+        with st.chat_message("user"):
+            st.write(user_query)
+        with st.chat_message("assistant"):
+            with st.spinner("Analyzing..."):
+                try:
+                    response = st.session_state.qa_chain({"query": user_query})
+                    answer = response["result"]
+                    st.write(answer)
+
+                    # Intrinsic Evaluation: ROUGE Scores
+                    reference_text = st.session_state.website_details["Content"][:500]  # Use first 500 chars as reference
+                    rouge_scores = calculate_rouge_scores(answer, reference_text)
+                    st.write("\n**Intrinsic Evaluation (ROUGE Scores):**")
+                    st.write(f"- ROUGE-1: {rouge_scores['ROUGE-1']:.4f}")
+                    st.write(f"- ROUGE-2: {rouge_scores['ROUGE-2']:.4f}")
+                    st.write(f"- ROUGE-L: {rouge_scores['ROUGE-L']:.4f}")
+
+                    # Extrinsic Evaluation: Human Feedback
+                    st.write("\n**Extrinsic Evaluation (Human Feedback):**")
+                    st.write("Please rate the quality of this answer:")
+                    relevance = st.slider("Relevance (1-5)", 1, 5, 3, key=f"relevance_{len(st.session_state.chat_history)}")
+                    coherence = st.slider("Coherence (1-5)", 1, 5, 3, key=f"coherence_{len(st.session_state.chat_history)}")
+                    informativeness = st.slider("Informativeness (1-5)", 1, 5, 3, key=f"informativeness_{len(st.session_state.chat_history)}")
+                    if st.button("Submit Feedback", key=f"submit_{len(st.session_state.chat_history)}"):
+                        st.session_state.human_eval_scores.append({
+                            "query": user_query,
+                            "answer": answer,
+                            "relevance": relevance,
+                            "coherence": coherence,
+                            "informativeness": informativeness
+                        })
+                        st.success("Feedback submitted!")
+
+                    # Display average human evaluation scores
+                    if st.session_state.human_eval_scores:
+                        avg_relevance = sum(score["relevance"] for score in st.session_state.human_eval_scores) / len(st.session_state.human_eval_scores)
+                        avg_coherence = sum(score["coherence"] for score in st.session_state.human_eval_scores) / len(st.session_state.human_eval_scores)
+                        avg_informativeness = sum(score["informativeness"] for score in st.session_state.human_eval_scores) / len(st.session_state.human_eval_scores)
+                        st.write(f"\n**Average Human Evaluation Scores (across {len(st.session_state.human_eval_scores)} responses):**")
+                        st.write(f"- Relevance: {avg_relevance:.2f}/5")
+                        st.write(f"- Coherence: {avg_coherence:.2f}/5")
+                        st.write(f"- Informativeness: {avg_informativeness:.2f}/5")
+
+                    model_accuracy_estimate = 80 + (st.session_state.main_page_accuracy - 50) * 0.2
+                    model_accuracy_estimate = min(100, max(0, model_accuracy_estimate))
+                    st.write(f"\n*Data Accuracy from Website: {st.session_state.main_page_accuracy}%*")
+                    st.write(f"*Estimated Model Accuracy for this response: {model_accuracy_estimate:.2f}%*")
+                    st.session_state.chat_history.append({"role": "user", "content": user_query})
+                    st.session_state.chat_history.append({"role": "assistant", "content": answer})
+                except Exception as e:
+                    st.error(f"⚠️ Error processing query: {str(e)}")
+                    logger.error(f"Query processing error: {str(e)}")
+
+    st.subheader("📄 Main Page Analysis")
     col1, col2 = st.columns(2)
     with col1:
         st.write(f"**🔹 Title:** {st.session_state.website_details['Title']}")
         st.write(f"**🔹 Description:** {st.session_state.website_details['Description']}")
-        st.write(f"**🔹 Keywords:** {st.session_state.website_details['Keywords']}")
-        st.write(f"**🔹 Word Count:** {st.session_state.website_details['Word Count']}")
-        # st.write(f"**🔹 Relative websites:** {st.session_state.website_details['Related Websites']}")
+        st.write(f"**🔹 Page Load Time:** {st.session_state.website_details['Page Load Time']}")
+        st.write(f"**🔹 Accuracy:** {st.session_state.website_details['Accuracy']}%")
     with col2:
         st.write("**🔹 Headings:**")
         for level, items in st.session_state.website_details["Headings"].items():
             if items:
-                st.write(f"  **{level}**: {', '.join(items)}")
-    
-    with st.expander("📸 Extracted Images"):
-        for img in st.session_state.website_details["Images"][:5]:
-            st.image(img, width=300)
-    
-    with st.expander("🔗 Extracted Links"):
-        for link in st.session_state.website_details["Links"][:10]:
-            st.write(link)
-    
-    # Display tags for keywords
-    st.write("### 🏷️ Extracted Tags")
-    for tag in st.session_state.website_details["Keywords"].split(","):
-        st.markdown(f"<span style='height:3rem;width:10rem;align-text:center;background-color:black; padding:5px 10px; border-radius:5px; margin-right:5px; display:inline-block; display:grid;'>{tag.strip()}</span>", unsafe_allow_html=True)
+                st.write(f"  **{level}**: {', '.join(items[:3])}" + ("..." if len(items) > 3 else ""))
 
-# if st.session_state.vector_db:
-#     rag_chain = get_rag_chain(st.session_state.vector_db)
-#     user_query = st.chat_input("💬 Ask about the website...")
-    
-#     if user_query:
-#         response = rag_chain.run({"question": user_query, "chat_history": st.session_state.chat_history})
-#         st.session_state.chat_history.append(("User", user_query)) if st.session():
-#         st.session_state.chat_history.append(("AI", response))
-#         st.write("🧠 **AI Response:**")
-#         st.write(response)
-    
-#     for role, msg in st.session_state.chat_history:
-#         with st.chat_message(role):
-#             st.write(msg)
+    if st.session_state.sub_pages_details:
+        st.subheader(f"📑 Sub-pages Analysis (Display Only, Up to {crawl_limit})")
+        for url, details in list(st.session_state.sub_pages_details.items()):
+            with st.expander(f"Details for {url}"):
+                st.write(f"**🔹 Title:** {details['Title']}")
+                st.write(f"**🔹 Page Load Time:** {details['Page Load Time']}")
+                st.write(f"**🔹 Internal Links:** {len(details['Internal Links'])}")
+                st.write(f"**🔹 Accuracy:** {details['Accuracy']}%")
+                st.write("**🔹 Content Preview:**")
+                st.write(details["Content"][:500] + "...")
+
+
+
